@@ -1,0 +1,195 @@
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+<link rel="import" href="../../bower_components/iron-ajax/iron-ajax.html">
+<link rel="import" href="../../bower_components/iron-image/iron-image.html">
+<link rel="import" href="../../src/mitiempo-current/mitiempo-current.html">
+<link rel="import" href="../../src/mitiempo-forecast/mitiempo-forecast.html">
+<link rel="import" href="../../bower_components/neon-animation/neon-animations.html">
+<link rel="import" href="../../bower_components/neon-animation/neon-animatable.html">
+<link rel="import" href="../../bower_components/neon-animation/neon-animated-pages.html">
+<link rel="import" href="../../bower_components/paper-button/paper-button.html">
+
+<dom-module id="mitiempo-app">
+  <template>
+    <style>
+      :host {
+        display: block;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      iron-image{
+        width: 100%;
+        height: 100%;
+        position: absolute;
+      }
+      #pages{
+        position: absolute;
+        width: 100%;
+        height: 100%;
+      }
+      paper-button{
+       float: right;
+       background-color: #599BFF;
+       color: #fff;
+       z-index:+1;
+     }
+     #btn{
+      float: right;
+     }
+     #name{
+      position: absolute;
+      background: white;
+      color: silver;
+      height: 50px;
+      width: 300px;
+      z-index: +1;
+      padding-top: 10px;
+     }
+   </style>
+   <iron-image src="[[imageSrc]]" preload sizing="cover"></iron-image>
+   <iron-ajax id="currentIron"
+   auto
+   handle-as="json"
+   on-response="getCurrentData"></iron-ajax>
+   <iron-ajax  id="forecastIron"
+   auto
+   handle-as="json"
+   on-response="getForecastData"></iron-ajax>
+   <neon-animated-pages id="pages" class="flex" entry-animation="{{entryAnimation}}" exit-animation="{{exitAnimation}}" on-track="handleTrack">
+    <neon-animatable>
+      <mitiempo-current id="currentWeather"></mitiempo-current>
+    </neon-animatable>
+    <neon-animatable>
+      <mitiempo-forecast id="forecastWeather"></mitiempo-forecast>
+    </neon-animatable>
+  </neon-animated-pages>
+  <paper-button id="btn" raised>Pronóstico</paper-button>
+</template>
+<script src="../../bower_components/moment/min/moment-with-locales.min.js"></script>
+<script>
+  Polymer({
+
+    is: 'mitiempo-app',
+
+    properties: {
+      imageSrc: String,
+    },
+
+    /*  listeners:{
+
+        "click": 'clicked'
+
+      },*/
+
+      ready: function(){
+        this.$.pages.selected=0;
+        this.exitAnimation = 'slide-down-animation';
+        var element = this;
+        if (navigator.geolocation){
+          navigator.geolocation.getCurrentPosition(function(position){
+            var urlCurrent = "http://api.openweathermap.org/data/2.5/weather?lat=" + position.coords.latitude + "&lon=" + position.coords.longitude + "&units=metric&lang=es&appid=e31e23f5a41aecb39b127c7e73e95a47";
+
+            var urlForecast = "http://api.openweathermap.org/data/2.5/forecast/daily?lat="+ position.coords.latitude + "&lon=" + position.coords.longitude + "&units=metric&lang=es&appid=e31e23f5a41aecb39b127c7e73e95a47&cnt=15";
+
+            element.$.currentIron.url = urlCurrent;
+            element.$.forecastIron.url =urlForecast;
+          });
+        }
+
+        this.$.btn.addEventListener('click', ()=>{
+          if (this.$.pages.selected == 1){
+            this.exitAnimation = 'slide-down-animation';
+            this.entryAnimation = 'fade-in-animation';
+            this.$.btn.innerHTML= 'Pronóstico';
+            this.$.pages.selected = 0;
+
+          }else{
+            this.exitAnimation = 'slide-up-animation';
+            this.entryAnimation = 'fade-in-animation';
+            this.$.btn.innerHTML='Tiempo Actual';
+            this.$.pages.selected = 1;
+          }
+        });
+      },
+
+      getCurrentData: function(event){
+        console.log(event.detail.response);
+        var response = event.detail.response;
+        this.imageSrc = "img/" + response.weather[0].icon + "_bg.jpg";
+        var current = this.$.currentWeather;
+        console.log(current);
+
+        current.temp = Number(response.main.temp).toFixed(1) + "ºC";
+        current.humidity = Number(response.main.humidity) + "%";
+        current.icon = "img/" + response.weather[0].icon + ".png";
+        current.desc = String(response.weather[0].description);
+        current.city = String(response.name);
+
+      },
+      getForecastData: function(event){
+        console.log(event.detail.response);
+        var response = event.detail.response;
+        var forecast = this.$.forecastWeather;
+        var list = response.list;
+
+        for (var i = 0; i < list.length; i++) {
+
+          list[i].icon = 'img/' + list[i].weather[0].icon + '.png';
+          list[i].desc = this.capitalize(list[i].weather[0].description);
+          list[i].humidity = list[i].humidity + '%';
+          list[i].tempMax =  Number(list[i].temp.max).toFixed(1) + 'º';
+          list[i].tempMin =  Number(list[i].temp.min).toFixed(1) + 'º';
+
+          var day = moment.unix(Number(list[i].dt)).locale('ES');
+          list[i].date = day.format('dddd DD/MM/YYYY');
+        }
+
+        forecast.list = list;
+      },
+
+      capitalize: function(s){
+       return s[0].toUpperCase() + s.slice(1);
+     },
+
+     handleTrack: function(e){
+      switch(e.detail.state){
+
+        case 'start':
+        this.sizeTapped = e.detail.y;
+        break;
+
+        case 'track':
+        break;
+
+        case 'end':
+        if (this.$.pages.selected === 0){
+          if (e.detail.y < (this.sizeTapped+100)){
+            this.exitAnimation = 'slide-up-animation';
+            this.entryAnimation = 'fade-in-animation';
+            this.$.pages.selected =1;
+          }
+
+        }
+        if(this.$.pages.selected === 1 && this.sizeTapped < 50) {
+          if (e.detail.y > (this.sizeTapped-100)){
+            this.exitAnimation = 'slide-down-animation';
+            this.entryAnimation = 'fade-in-animation';
+            this.$.pages.selected = 0;
+
+          }
+        }
+        break;
+      }
+    },
+
+/*    clicked: function(){
+      this.$.btn.addEventListener("click", function(){
+        console.log('Entramos');
+        document.getElementById('btn').style.display = "none";
+
+  });
+}
+*/
+});
+</script>
+</dom-module>
